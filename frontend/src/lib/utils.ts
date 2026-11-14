@@ -80,22 +80,55 @@ export const ERROR_MESSAGES: Record<string, string> = {
 }
 
 export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    // Check for custom errors in the message
-    for (const [key, message] of Object.entries(ERROR_MESSAGES)) {
-      if (error.message.includes(key)) {
-        return message
-      }
-    }
-    return error.message
+  // Keep raw provider / RPC details in the browser console, never in the UI.
+  const rawMessage =
+    error instanceof Error ? error.message :
+    typeof error === 'string' ? error :
+    ''
+
+  // Preserve readable messages for known contract custom errors.
+  for (const [key, message] of Object.entries(ERROR_MESSAGES)) {
+    if (rawMessage.includes(key)) return message
   }
-  if (typeof error === 'string') {
-    for (const [key, message] of Object.entries(ERROR_MESSAGES)) {
-      if (error.includes(key)) {
-        return message
-      }
-    }
-    return error
+
+  const normalized = rawMessage.toLowerCase()
+
+  if (
+    normalized.includes('timeout') ||
+    normalized.includes('timed out') ||
+    normalized.includes('request took too long')
+  ) {
+    return 'The Mezo network is taking too long to respond. Please try again in a moment.'
   }
-  return 'An unknown error occurred'
+
+  if (
+    normalized.includes('user rejected') ||
+    normalized.includes('user denied') ||
+    normalized.includes('rejected the request')
+  ) {
+    return 'You cancelled the wallet request.'
+  }
+
+  if (normalized.includes('insufficient funds')) {
+    return 'Your wallet does not have enough funds to complete this transaction.'
+  }
+
+  if (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('network error') ||
+    normalized.includes('fetch failed') ||
+    normalized.includes('http request failed')
+  ) {
+    return 'Unable to connect to the Mezo network. Check your connection and try again.'
+  }
+
+  if (
+    normalized.includes('execution reverted') ||
+    normalized.includes('contractfunctionexecutionerror') ||
+    normalized.includes('transaction reverted')
+  ) {
+    return 'The transaction could not be completed. Check the lock requirements and try again.'
+  }
+
+  return 'Something went wrong. Please try again.'
 }
