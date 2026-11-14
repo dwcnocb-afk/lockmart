@@ -11,6 +11,30 @@ import { getErrorMessage, formatAddress } from '@/lib/utils'
 const RPC_URL = MEZO_TESTNET_RPC
 const CHUNK_SIZE = 5000n // Process logs in chunks of 5000 blocks
 
+// Fetch event logs in ranges smaller than the Mezo RPC provider's 10,000-block limit.
+async function getLogsInChunks<T>(
+  fetchChunk: (fromBlock: bigint, toBlock: bigint) => Promise<T[]>,
+  startBlock: bigint,
+  endBlock: bigint
+): Promise<T[]> {
+  const chunkSize = 5000n
+  const allLogs: T[] = []
+  let fromBlock = startBlock
+
+  while (fromBlock <= endBlock) {
+    const toBlock =
+      fromBlock + chunkSize > endBlock
+        ? endBlock
+        : fromBlock + chunkSize
+
+    const logs = await fetchChunk(fromBlock, toBlock)
+    allLogs.push(...logs)
+    fromBlock = toBlock + 1n
+  }
+
+  return allLogs
+}
+
 // Create a minimal chain object for the public client (module level, not passed to client components)
 const mezoTestnetChain: Chain = {
   id: MEZO_TESTNET_ID,
@@ -94,42 +118,42 @@ export default function BrowsePage() {
       // Get current block number
       const currentBlock = await publicClient.getBlockNumber()
 
-      // Fetch Listed events in chunks
-      const allLogs: ListedLog[] = []
-      let fromBlock = DEPLOY_BLOCK
-
-      while (fromBlock < currentBlock) {
-        const toBlock = fromBlock + CHUNK_SIZE > currentBlock ? currentBlock : fromBlock + CHUNK_SIZE
-
-        try {
-          const logs = await publicClient.getLogs({
+      // Fetch Listed, Cancelled, and Sold events in chunks to respect the Mezo RPC limit.
+      const allLogs = await getLogsInChunks(
+        (fromBlock, toBlock) =>
+          publicClient.getLogs({
             address: lockMarketAddress,
             event: LISTED_EVENT,
             fromBlock,
             toBlock,
-          })
-          allLogs.push(...logs as ListedLog[])
-        } catch (chunkError) {
-          console.warn(`Failed to fetch logs from ${fromBlock} to ${toBlock}:`, chunkError)
-        }
+          }),
+        DEPLOY_BLOCK,
+        currentBlock
+      ) as ListedLog[]
 
-        fromBlock = toBlock + 1n
-      }
+      const cancelledLogs = await getLogsInChunks(
+        (fromBlock, toBlock) =>
+          publicClient.getLogs({
+            address: lockMarketAddress,
+            event: CANCELLED_EVENT,
+            fromBlock,
+            toBlock,
+          }),
+        DEPLOY_BLOCK,
+        currentBlock
+      ) as CancelledLog[]
 
-      // Also fetch Cancelled and Sold events to filter out inactive listings
-      const cancelledLogs = await publicClient.getLogs({
-        address: lockMarketAddress,
-        event: CANCELLED_EVENT,
-        fromBlock: DEPLOY_BLOCK,
-        toBlock: currentBlock,
-      })
-
-      const soldLogs = await publicClient.getLogs({
-        address: lockMarketAddress,
-        event: SOLD_EVENT,
-        fromBlock: DEPLOY_BLOCK,
-        toBlock: currentBlock,
-      })
+      const soldLogs = await getLogsInChunks(
+        (fromBlock, toBlock) =>
+          publicClient.getLogs({
+            address: lockMarketAddress,
+            event: SOLD_EVENT,
+            fromBlock,
+            toBlock,
+          }),
+        DEPLOY_BLOCK,
+        currentBlock
+      ) as SoldLog[]
 
       // Create sets of cancelled and sold tokenIds
       const cancelledTokenIds = new Set(cancelledLogs.map(log => log.args.tokenId))
