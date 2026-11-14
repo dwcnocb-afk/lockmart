@@ -302,7 +302,7 @@ export default function BrowsePage() {
                 </div>
               ))}
             </div>
-          ) : listings.length === 0 ? (
+          ) : error ? null : listings.length === 0 ? (
             <div className="rounded-2xl p-10 sm:p-14 text-center" style={{ background: 'rgba(28,32,38,.72)', border: '1px dashed rgba(137,147,159,.3)' }}>
               <div className="w-14 h-14 rounded-2xl mx-auto mb-5 flex items-center justify-center text-2xl" style={{ background: 'rgba(169,68,56,.16)', color: '#d58d83' }}>⌁</div>
               <p className="text-xl font-semibold text-white">No active positions yet</p>
