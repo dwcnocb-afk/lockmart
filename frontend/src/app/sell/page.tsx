@@ -324,7 +324,9 @@ export default function SellPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {userLocks.map((lock) => {
-                    const listing = userListings.get(lock.tokenId)
+                    const rawListing = userListings.get(lock.tokenId)
+                    // A never-listed token comes back from getListing() as an all-zero struct
+                    const listing = rawListing && rawListing.seller !== '0x0000000000000000000000000000000000000000' ? rawListing : undefined
                     const isListed = listing && !listing.cancelled && !listing.sold
                     const currentTime = BigInt(Math.floor(Date.now() / 1000))
                     const isExpired = listing && currentTime > listing.endTime
