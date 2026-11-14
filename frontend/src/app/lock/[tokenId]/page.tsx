@@ -242,8 +242,7 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
     ? Number((currentTime - listingData.startTime) * 100n / (listingData.endTime - listingData.startTime))
     : listingData.endTime <= currentTime ? 100 : 0
 
-  // Fair price calculation (simplified - could be more complex)
-  const fairPrice = lockData.amount * 10n ** 18n / 100n // Placeholder: 1% of locked amount per year
+  // Do not display a fabricated fair value. A defensible valuation requires live market and incentive inputs.
 
   return (
     <div className="min-h-screen">
@@ -365,14 +364,17 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm text-gray-500 dark:text-gray-400">Current Dutch Price</label>
-                    <p className="text-xl font-bold text-primary-600 dark:text-primary-400">
+                    <p className="text-xl font-bold" style={{ color: "#d58d83" }}>
                       {formatPrice(currentPrice)} MUSD
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">Estimated Fair Price</label>
-                    <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                      {formatPrice(fairPrice)} MUSD
+                    <label className="text-sm text-gray-500 dark:text-gray-400">Fair value estimate</label>
+                    <p className="text-sm font-semibold" style={{ color: '#D6A84F' }}>
+                      Not available
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#89939F' }}>
+                      No verified valuation data is connected yet.
                     </p>
                   </div>
                 </div>
@@ -380,7 +382,7 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
                   <label className="text-sm text-gray-500 dark:text-gray-400">Price Progress</label>
                   <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-1">
                     <div
-                      className="h-full bg-primary-600 transition-all duration-300"
+                      className="h-full transition-all duration-300" style={{ background: "#A94438" }}
                       style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
                     />
                   </div>
