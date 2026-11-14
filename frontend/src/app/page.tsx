@@ -214,9 +214,18 @@ export default function BrowsePage() {
             abi: LOCKMARKET_ABI,
             functionName: 'getListing',
             args: [tokenId],
-          }) as [bigint, string, bigint, bigint, bigint, bigint, boolean, boolean]
+          }) as {
+            tokenId: bigint
+            seller: `0x${string}`
+            startPrice: bigint
+            endPrice: bigint
+            startTime: bigint
+            endTime: bigint
+            cancelled: boolean
+            sold: boolean
+          }
 
-          const [, seller, startPrice, endPrice, startTime, endTime, cancelled, sold] = listing
+          const { seller, startPrice, endPrice, startTime, endTime, cancelled, sold } = listing
 
           // Skip if cancelled or sold (double check)
           if (cancelled || sold) continue

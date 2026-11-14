@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
 import { Nav } from '@/components/Nav'
-import { DEPLOY_BLOCK, LOCKMARKET_ABI, MUSD_ABI, getAddresses } from '@/lib/contracts'
+import { LOCKMARKET_ABI, MUSD_ABI, veMEZO_ABI, getAddresses } from '@/lib/contracts'
 import { formatAddress, formatPrice, formatAmount, formatTime, getErrorMessage, calculateCurrentPrice } from '@/lib/utils'
 import { MEZO_TESTNET_ID } from '@/lib/wagmi'
 
@@ -60,38 +60,106 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
     setError(null)
 
     try {
-      // Fetch lock data via inspect
-      const lock = await publicClient.readContract({
-        address: lockMarketAddress,
-        abi: LOCKMARKET_ABI,
-        functionName: 'inspect',
-        args: [tokenIdBigInt],
-      }) as [bigint, bigint, boolean, bigint, boolean, number, string, bigint, boolean]
+      // Fetch the full lock snapshot. If the marketplace helper is unavailable,
+      // read the canonical veMEZO fields directly so inspection still works.
+      let lockSnapshot: LockDetailData
+      try {
+        const lock = await publicClient.readContract({
+          address: lockMarketAddress,
+          abi: LOCKMARKET_ABI,
+          functionName: 'inspect',
+          args: [tokenIdBigInt],
+        }) as [bigint, bigint, boolean, bigint, boolean, number, string, bigint, boolean]
 
-      const [amount, end, isPermanent, votingPower, voted, escrowType, grantManager, currentPrice, listingActive] = lock
+        const [amount, end, isPermanent, votingPower, voted, escrowType, grantManager, currentPrice, listingActive] = lock
+        lockSnapshot = {
+          tokenId: tokenIdBigInt,
+          amount,
+          end,
+          isPermanent,
+          votingPower,
+          voted,
+          escrowType,
+          grantManager,
+          currentPrice,
+          listingActive,
+        }
+      } catch (inspectError) {
+        const veMEZO = addresses.veMEZO as `0x${string}`
+        const [lock, votingPower, voted, escrowType, grantManager] = await Promise.all([
+          publicClient.readContract({
+            address: veMEZO,
+            abi: veMEZO_ABI,
+            functionName: 'locked',
+            args: [tokenIdBigInt],
+          }) as Promise<[bigint, bigint, boolean]>,
+          publicClient.readContract({
+            address: veMEZO,
+            abi: veMEZO_ABI,
+            functionName: 'votingPowerOfNFT',
+            args: [tokenIdBigInt],
+          }) as Promise<bigint>,
+          publicClient.readContract({
+            address: veMEZO,
+            abi: veMEZO_ABI,
+            functionName: 'voted',
+            args: [tokenIdBigInt],
+          }) as Promise<boolean>,
+          publicClient.readContract({
+            address: veMEZO,
+            abi: veMEZO_ABI,
+            functionName: 'escrowType',
+            args: [tokenIdBigInt],
+          }) as Promise<number>,
+          publicClient.readContract({
+            address: veMEZO,
+            abi: veMEZO_ABI,
+            functionName: 'grantManager',
+            args: [tokenIdBigInt],
+          }) as Promise<`0x${string}`>,
+        ])
 
-      setLockData({
-        tokenId: tokenIdBigInt,
-        amount,
-        end,
-        isPermanent,
-        votingPower,
-        voted,
-        escrowType,
-        grantManager,
-        currentPrice,
-        listingActive,
-      })
-
-      // Fetch listing data
+        lockSnapshot = {
+          tokenId: tokenIdBigInt,
+          amount: BigInt(lock[0]),
+          end: lock[1],
+          isPermanent: lock[2],
+          votingPower,
+          voted,
+          escrowType,
+          grantManager,
+          currentPrice: 0n,
+          listingActive: false,
+        }
+        console.warn('LockMarket.inspect() failed; loaded lock fields directly from veMEZO:', inspectError)
+      }
+      // getListing returns one Solidity Listing struct (a named tuple).
       const listing = await publicClient.readContract({
         address: lockMarketAddress,
         abi: LOCKMARKET_ABI,
         functionName: 'getListing',
         args: [tokenIdBigInt],
-      }) as [bigint, string, bigint, bigint, bigint, bigint, boolean, boolean]
+      }) as {
+        tokenId: bigint
+        seller: `0x${string}`
+        startPrice: bigint
+        endPrice: bigint
+        startTime: bigint
+        endTime: bigint
+        cancelled: boolean
+        sold: boolean
+      }
 
-      const [, seller, startPrice, endPrice, startTime, endTime, cancelled, sold] = listing
+      const { seller, startPrice, endPrice, startTime, endTime, cancelled, sold } = listing
+
+      // Listing state comes from the listing record, not from the optional inspect helper.
+      const now = BigInt(Math.floor(Date.now() / 1000))
+      setLockData({
+        ...lockSnapshot,
+        currentPrice: calculateCurrentPrice(startPrice, endPrice, startTime, endTime, now),
+        listingActive: seller !== '0x0000000000000000000000000000000000000000' &&
+          !cancelled && !sold && now <= endTime,
+      })
 
       setListingData({
         tokenId: tokenIdBigInt,
