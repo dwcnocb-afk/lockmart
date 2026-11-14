@@ -7,6 +7,7 @@ import { Nav } from '@/components/Nav'
 import { LOCKMARKET_ABI, veMEZO_ABI, MUSD_ABI, getAddresses } from '@/lib/contracts'
 import { formatAddress, formatAmount, formatPrice, getErrorMessage, formatTime } from '@/lib/utils'
 import { MEZO_TESTNET_ID } from '@/lib/wagmi'
+import { getOwnedTokenIds } from '@/lib/ownedLocks'
 
 interface UserLock {
   tokenId: bigint
@@ -35,7 +36,7 @@ interface UserListing {
 export default function SellPage() {
   const { address, chainId } = useAccount()
   const publicClient = usePublicClient()
-  const { writeContract, data: hash, isPending: isWriting } = useWriteContract()
+  const { writeContract, writeContractAsync, data: hash, isPending: isWriting } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
 
   const [userLocks, setUserLocks] = useState<UserLock[]>([])
@@ -43,6 +44,7 @@ export default function SellPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [txError, setTxError] = useState<string | null>(null)
+  const [unreadableIds, setUnreadableIds] = useState<string[]>([])
 
   // Form state
   const [selectedTokenId, setSelectedTokenId] = useState<string>('')
@@ -65,25 +67,13 @@ export default function SellPage() {
     setError(null)
 
     try {
-      // Get balance of veMEZO NFTs
-      const balance = await publicClient.readContract({
-        address: veMEZOAddress,
-        abi: veMEZO_ABI,
-        functionName: 'balanceOf',
-        args: [address],
-      }) as bigint
+      const tokenIds = await getOwnedTokenIds(publicClient as any, veMEZOAddress, address)
 
       const locks: UserLock[] = []
+      const failed: string[] = []
 
-      for (let i = 0n; i < balance; i++) {
+      for (const tokenId of tokenIds) {
         try {
-          const tokenId = await publicClient.readContract({
-            address: veMEZOAddress,
-            abi: veMEZO_ABI,
-            functionName: 'ownerToNFTokenIdList',
-            args: [address, i],
-          }) as bigint
-
           // Get lock details via inspect
           const lock = await publicClient.readContract({
             address: lockMarketAddress,
@@ -107,11 +97,13 @@ export default function SellPage() {
             listingActive,
           })
         } catch (err) {
-          console.warn(`Failed to fetch lock ${i}:`, err)
+          console.warn(`Failed to fetch lock ${tokenId}:`, err)
+          failed.push(tokenId.toString())
         }
       }
 
       setUserLocks(locks)
+      setUnreadableIds(failed)
 
       // Fetch listings for each lock
       const listingsMap = new Map<bigint, UserListing>()
@@ -172,12 +164,13 @@ export default function SellPage() {
       }) as boolean
 
       if (!isApproved) {
-        await writeContract({
+        const approveHash = await writeContractAsync({
           address: veMEZOAddress,
           abi: veMEZO_ABI,
           functionName: 'setApprovalForAll',
           args: [lockMarketAddress, true],
         })
+        await publicClient.waitForTransactionReceipt({ hash: approveHash })
       }
     } catch (err) {
       throw new Error(getErrorMessage(err))
@@ -208,7 +201,7 @@ export default function SellPage() {
         throw new Error('Duration must be greater than 0')
       }
 
-      await writeContract({
+      await writeContractAsync({
         address: lockMarketAddress,
         abi: LOCKMARKET_ABI,
         functionName: 'list',
@@ -304,7 +297,15 @@ export default function SellPage() {
           </div>
         )}
 
-        {userLocks.length === 0 && address && (
+        {unreadableIds.length > 0 && (
+          <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <p className="text-yellow-800 dark:text-yellow-200">
+              Found veMEZO lock{unreadableIds.length > 1 ? 's' : ''} #{unreadableIds.join(', #')} in your wallet, but couldn't read {unreadableIds.length > 1 ? 'their' : 'its'} details from the Mezo network. Please retry in a moment.
+            </p>
+          </div>
+        )}
+
+        {userLocks.length === 0 && unreadableIds.length === 0 && address && (
           <div className="text-center py-12">
             <div className="text-gray-500 dark:text-gray-400 text-lg">No veMEZO locks found</div>
             <p className="mt-2 text-gray-400 dark:text-gray-500">
