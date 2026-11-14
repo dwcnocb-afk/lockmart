@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
 import { Nav } from '@/components/Nav'
-import { DEPLOY_BLOCK, LOCKMARKET_ABI, MUSD_ABI, getAddresses } from '@/lib/contracts'
+import { LOCKMARKET_ABI, MUSD_ABI, getAddresses } from '@/lib/contracts'
+import { readLockDetails } from '@/lib/ownedLocks'
 import { formatAddress, formatPrice, formatAmount, formatTime, getErrorMessage, calculateCurrentPrice } from '@/lib/utils'
 import { MEZO_TESTNET_ID } from '@/lib/wagmi'
 
@@ -38,7 +39,7 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
 
   const { address, chainId } = useAccount()
   const publicClient = usePublicClient()
-  const { writeContract, data: hash, isPending: isWriting } = useWriteContract()
+  const { writeContractAsync, data: hash, isPending: isWriting } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
 
   const [lockData, setLockData] = useState<LockDetailData | null>(null)
@@ -52,6 +53,7 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
   const addresses = getAddresses(MEZO_TESTNET_ID)
   const lockMarketAddress = addresses.LockMarket as `0x${string}`
   const musdAddress = addresses.MUSD as `0x${string}`
+  const veMEZOAddress = addresses.veMEZO as `0x${string}`
 
   const fetchData = useCallback(async () => {
     if (!publicClient) return
@@ -60,28 +62,15 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
     setError(null)
 
     try {
-      // Fetch lock data via inspect
-      const lock = await publicClient.readContract({
-        address: lockMarketAddress,
-        abi: LOCKMARKET_ABI,
-        functionName: 'inspect',
-        args: [tokenIdBigInt],
-      }) as [bigint, bigint, boolean, bigint, boolean, number, string, bigint, boolean]
-
-      const [amount, end, isPermanent, votingPower, voted, escrowType, grantManager, currentPrice, listingActive] = lock
-
-      setLockData({
-        tokenId: tokenIdBigInt,
-        amount,
-        end,
-        isPermanent,
-        votingPower,
-        voted,
-        escrowType,
-        grantManager,
-        currentPrice,
-        listingActive,
-      })
+      // Read the lock. inspect() can revert if any veMEZO getter misbehaves, so
+      // readLockDetails falls back to reading veMEZO directly.
+      const d = await readLockDetails(
+        publicClient as any,
+        veMEZOAddress,
+        lockMarketAddress,
+        LOCKMARKET_ABI,
+        tokenIdBigInt,
+      )
 
       // Fetch listing data
       const listing = await publicClient.readContract({
@@ -92,6 +81,27 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
       }) as [bigint, string, bigint, bigint, bigint, bigint, boolean, boolean]
 
       const [, seller, startPrice, endPrice, startTime, endTime, cancelled, sold] = listing
+
+      // The listing getter is the source of truth for listing status.
+      const now = BigInt(Math.floor(Date.now() / 1000))
+      const listingActive =
+        seller !== '0x0000000000000000000000000000000000000000' &&
+        !cancelled &&
+        !sold &&
+        now <= endTime
+
+      setLockData({
+        tokenId: tokenIdBigInt,
+        amount: d.amount,
+        end: d.end,
+        isPermanent: d.isPermanent,
+        votingPower: d.votingPower,
+        voted: d.voted,
+        escrowType: d.escrowType,
+        grantManager: d.grantManager,
+        currentPrice: d.currentPrice,
+        listingActive,
+      })
 
       setListingData({
         tokenId: tokenIdBigInt,
@@ -108,7 +118,7 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
     } finally {
       setLoading(false)
     }
-  }, [publicClient, lockMarketAddress, tokenIdBigInt])
+  }, [publicClient, lockMarketAddress, veMEZOAddress, tokenIdBigInt])
 
   useEffect(() => {
     fetchData()
@@ -135,34 +145,33 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
       const minAmount = 0n
       const minEnd = 0n
 
-      // First approve MUSD if needed
-      const allowance = await publicClient?.readContract({
+      // First approve MUSD if needed, and WAIT for it to confirm before buying
+      const allowance = (await publicClient?.readContract({
         address: musdAddress,
         abi: MUSD_ABI,
         functionName: 'allowance',
         args: [address, lockMarketAddress],
-      }) as bigint
+      })) as bigint
 
       if (allowance < maxPrice) {
-        // Approve maxPrice amount
-        await writeContract({
+        const approveHash = await writeContractAsync({
           address: musdAddress,
           abi: MUSD_ABI,
           functionName: 'approve',
           args: [lockMarketAddress, maxPrice],
         })
-
-        // Wait for approval to confirm
-        // The useWaitForTransactionReceipt will handle this
+        await publicClient?.waitForTransactionReceipt({ hash: approveHash })
       }
 
       // Then buy
-      await writeContract({
+      const buyHash = await writeContractAsync({
         address: lockMarketAddress,
         abi: LOCKMARKET_ABI,
         functionName: 'buy',
         args: [tokenIdBigInt, maxPrice, minAmount, minEnd],
       })
+      await publicClient?.waitForTransactionReceipt({ hash: buyHash })
+      fetchData()
     } catch (err) {
       setTxError(getErrorMessage(err))
     } finally {
