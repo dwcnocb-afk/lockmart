@@ -113,3 +113,83 @@ async function scanTransfersTo(
   }
   return logs.map((l) => l.args.tokenId as bigint)
 }
+
+// ---------- Lock details (tolerant reader) ----------
+
+const LOCKED_3 = [{ inputs: [{ name: 'tokenId', type: 'uint256' }], name: 'locked', outputs: [{ name: 'amount', type: 'int128' }, { name: 'end', type: 'uint256' }, { name: 'isPermanent', type: 'bool' }], stateMutability: 'view', type: 'function' }] as const
+const LOCKED_2 = [{ inputs: [{ name: 'tokenId', type: 'uint256' }], name: 'locked', outputs: [{ name: 'amount', type: 'int128' }, { name: 'end', type: 'uint256' }], stateMutability: 'view', type: 'function' }] as const
+
+export interface LockDetails {
+  amount: bigint
+  end: bigint
+  isPermanent: boolean
+  votingPower: bigint
+  voted: boolean
+  escrowType: number
+  grantManager: string
+  currentPrice: bigint
+  listingActive: boolean
+  failedFields: string[]
+}
+
+/**
+ * Reads a lock's details. Tries LockMarket.inspect() first; if that reverts, reads each
+ * field straight from veMEZO so one mismatching getter can't hide the whole lock.
+ * Fields that can't be read are listed in `failedFields` and logged to the console.
+ */
+export async function readLockDetails(
+  client: PublicClient,
+  veMEZO: Address,
+  lockMarket: Address,
+  lockMarketAbi: any,
+  tokenId: bigint,
+): Promise<LockDetails> {
+  try {
+    const r = (await client.readContract({
+      address: lockMarket, abi: lockMarketAbi, functionName: 'inspect', args: [tokenId],
+    })) as readonly [bigint, bigint, boolean, bigint, boolean, number, string, bigint, boolean]
+    return {
+      amount: r[0], end: r[1], isPermanent: r[2], votingPower: r[3], voted: r[4],
+      escrowType: Number(r[5]), grantManager: r[6], currentPrice: r[7], listingActive: r[8],
+      failedFields: [],
+    }
+  } catch (err) {
+    console.warn(`[Lockmart] inspect(${tokenId}) reverted, reading veMEZO directly`, err)
+  }
+
+  const failed: string[] = []
+  const tryRead = async <T,>(name: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try { return await fn() } catch (err) {
+      failed.push(name)
+      console.warn(`[Lockmart] veMEZO.${name}(${tokenId}) failed`, err)
+      return fallback
+    }
+  }
+  const read = (fnName: string, abi: any) =>
+    client.readContract({ address: veMEZO, abi, functionName: fnName, args: [tokenId] } as any)
+
+  let amount = 0n, end = 0n, isPermanent = false, lockedOk = true
+  try {
+    const l = (await read('locked', LOCKED_3)) as readonly [bigint, bigint, boolean]
+    amount = BigInt(l[0]); end = l[1]; isPermanent = l[2]
+  } catch {
+    try {
+      const l = (await read('locked', LOCKED_2)) as readonly [bigint, bigint]
+      amount = BigInt(l[0]); end = l[1]
+      console.warn('[Lockmart] veMEZO.locked returns 2 values (no isPermanent) — LockMarket.sol expects 3')
+      failed.push('locked(3-value)')
+    } catch (err) {
+      lockedOk = false
+      failed.push('locked')
+      console.warn(`[Lockmart] veMEZO.locked(${tokenId}) failed`, err)
+    }
+  }
+  if (!lockedOk) throw new Error(`Could not read lock #${tokenId}`)
+
+  const votingPower = await tryRead('votingPowerOfNFT', () => read('votingPowerOfNFT', veMEZO_ABI) as Promise<bigint>, 0n)
+  const voted = await tryRead('voted', () => read('voted', veMEZO_ABI) as Promise<boolean>, false)
+  const escrowType = await tryRead('escrowType', async () => Number(await read('escrowType', veMEZO_ABI)), 0)
+  const grantManager = await tryRead('grantManager', () => read('grantManager', veMEZO_ABI) as Promise<string>, '0x0000000000000000000000000000000000000000')
+
+  return { amount, end, isPermanent, votingPower, voted, escrowType, grantManager, currentPrice: 0n, listingActive: false, failedFields: failed }
+}
