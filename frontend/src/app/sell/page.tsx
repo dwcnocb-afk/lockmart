@@ -81,7 +81,7 @@ export default function SellPage() {
             address: veMEZOAddress,
             abi: veMEZO_ABI,
             functionName: 'tokenOfOwnerByIndex',
-            args: [i],
+            args: [address, i],
           }) as bigint
 
           // Get lock details via inspect
