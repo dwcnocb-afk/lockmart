@@ -276,12 +276,17 @@ export default function SellPage() {
     <div className="min-h-screen">
       <Nav />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sell Your Locks</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            List your veMEZO locks for sale on the marketplace
+        <section className="mb-8 rounded-2xl p-6 sm:p-8" style={{ background: 'linear-gradient(110deg,rgba(55,35,35,.8),rgba(29,33,39,.96))', border: '1px solid rgba(214,168,79,.18)' }}>
+          <p className="eyebrow mb-3">Seller workspace / Mezo Testnet</p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">Manage your positions</h1>
+          <p className="mt-3 max-w-2xl text-sm sm:text-base leading-6" style={{ color: '#aeb6c0' }}>
+            Review your veMEZO locks, check listing eligibility and create a transparent sale listing. Your NFT remains in your wallet until a buyer completes the purchase.
           </p>
-        </div>
+          <div className="mt-6 flex flex-wrap gap-3 text-xs">
+            <span className="rounded-full px-3 py-2" style={{ background: 'rgba(214,168,79,.1)', color: '#e2c27e', border: '1px solid rgba(214,168,79,.18)' }}>Non-custodial listing</span>
+            <span className="rounded-full px-3 py-2" style={{ background: 'rgba(169,68,56,.13)', color: '#e0a39a', border: '1px solid rgba(196,90,76,.2)' }}>MUSD settlement</span>
+          </div>
+        </section>
 
         {!isMezoTestnet && (
           <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
