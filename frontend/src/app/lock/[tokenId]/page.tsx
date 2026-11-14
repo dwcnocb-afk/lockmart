@@ -133,8 +133,6 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
         }
         console.warn('LockMarket.inspect() failed; loaded lock fields directly from veMEZO:', inspectError)
       }
-      setLockData(lockSnapshot)
-
       // getListing returns one Solidity Listing struct (a named tuple).
       const listing = await publicClient.readContract({
         address: lockMarketAddress,
@@ -153,6 +151,15 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
       }
 
       const { seller, startPrice, endPrice, startTime, endTime, cancelled, sold } = listing
+
+      // Listing state comes from the listing record, not from the optional inspect helper.
+      const now = BigInt(Math.floor(Date.now() / 1000))
+      setLockData({
+        ...lockSnapshot,
+        currentPrice: calculateCurrentPrice(startPrice, endPrice, startTime, endTime, now),
+        listingActive: seller !== '0x0000000000000000000000000000000000000000' &&
+          !cancelled && !sold && now <= endTime,
+      })
 
       setListingData({
         tokenId: tokenIdBigInt,
