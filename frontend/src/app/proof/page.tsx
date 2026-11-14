@@ -33,9 +33,10 @@ export default function ProofPage() {
       <Nav />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Transaction Proofs</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Verified transaction hashes for demo and verification purposes
+          <p className="eyebrow mb-3">Transparency / Mezo Explorer</p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">On-chain proof</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6" style={{ color: '#89939F' }}>
+            Inspect the contract activity and verify transaction records directly on the Mezo Testnet explorer.
           </p>
         </div>
 
@@ -77,7 +78,7 @@ export default function ProofPage() {
                         href={`https://explorer.test.mezo.org/tx/${tx.hash}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary-600 dark:text-primary-400 hover:underline text-sm font-medium"
+                        className="hover:underline text-sm font-semibold" style={{ color: "#d58d83" }}
                       >
                         View on Explorer
                       </a>
