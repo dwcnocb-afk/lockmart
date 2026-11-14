@@ -7,7 +7,7 @@ import { Nav } from '@/components/Nav'
 import { LOCKMARKET_ABI, veMEZO_ABI, MUSD_ABI, getAddresses } from '@/lib/contracts'
 import { formatAddress, formatAmount, formatPrice, getErrorMessage, formatTime } from '@/lib/utils'
 import { MEZO_TESTNET_ID } from '@/lib/wagmi'
-import { getOwnedTokenIds } from '@/lib/ownedLocks'
+import { getOwnedTokenIds, readLockDetails } from '@/lib/ownedLocks'
 
 interface UserLock {
   tokenId: bigint
@@ -74,27 +74,18 @@ export default function SellPage() {
 
       for (const tokenId of tokenIds) {
         try {
-          // Get lock details via inspect
-          const lock = await publicClient.readContract({
-            address: lockMarketAddress,
-            abi: LOCKMARKET_ABI,
-            functionName: 'inspect',
-            args: [tokenId],
-          }) as [bigint, bigint, boolean, bigint, boolean, number, string, bigint, boolean]
-
-          const [amount, end, isPermanent, votingPower, voted, escrowType, grantManager, currentPrice, listingActive] = lock
-
+          const d = await readLockDetails(publicClient as any, veMEZOAddress, lockMarketAddress, LOCKMARKET_ABI, tokenId)
           locks.push({
             tokenId,
-            amount,
-            end,
-            isPermanent,
-            votingPower,
-            voted,
-            escrowType,
-            grantManager,
-            currentPrice,
-            listingActive,
+            amount: d.amount,
+            end: d.end,
+            isPermanent: d.isPermanent,
+            votingPower: d.votingPower,
+            voted: d.voted,
+            escrowType: d.escrowType,
+            grantManager: d.grantManager,
+            currentPrice: d.currentPrice,
+            listingActive: d.listingActive,
           })
         } catch (err) {
           console.warn(`Failed to fetch lock ${tokenId}:`, err)
