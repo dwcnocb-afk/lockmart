@@ -248,66 +248,85 @@ export default function BrowsePage() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Browse Listings</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Active veMEZO locks for sale on Mezo Testnet
-          </p>
-        </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+        <section className="relative overflow-hidden rounded-3xl mt-7 sm:mt-10 mb-10 p-6 sm:p-10 lg:p-14" style={{ background: 'linear-gradient(115deg,rgba(43,35,36,.98),rgba(29,33,39,.98) 58%,rgba(38,31,30,.96))', border: '1px solid rgba(214,168,79,.18)' }}>
+          <div className="absolute -right-20 -top-28 w-80 h-80 rounded-full blur-3xl pointer-events-none" style={{ background: 'rgba(169,68,56,.18)' }} />
+          <div className="absolute right-12 bottom-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{ background: 'rgba(214,168,79,.08)' }} />
+          <div className="relative max-w-3xl">
+            <div className="eyebrow mb-5 flex items-center gap-2"><span className="w-6 h-px" style={{ background: '#D6A84F' }} /> MEZO TESTNET · veMEZO SECONDARY MARKET</div>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.08] text-white text-balance">
+              Your veMEZO position.<br /><span style={{ color: '#d58d83' }}>Your liquidity.</span>
+            </h1>
+            <p className="mt-5 max-w-xl text-base sm:text-lg leading-7" style={{ color: '#aeb6c0' }}>
+              Discover tokenized lock positions, compare live asking prices and trade through a non-custodial marketplace built for Mezo.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              <a href="#marketplace" className="btn-primary">Explore marketplace <span aria-hidden>→</span></a>
+              <a href="/sell" className="btn-secondary">List your veMEZO lock</a>
+            </div>
+          </div>
+          <div className="relative mt-10 pt-6 border-t grid grid-cols-2 sm:grid-cols-3 gap-5" style={{ borderColor: 'rgba(137,147,159,.18)' }}>
+            <div><p className="data-label mb-1">Active listings</p><p className="text-2xl font-semibold text-white tabular-nums">{loading ? '—' : listings.length}</p></div>
+            <div><p className="data-label mb-1">Settlement asset</p><p className="text-2xl font-semibold" style={{ color: '#D6A84F' }}>MUSD</p></div>
+            <div className="col-span-2 sm:col-span-1"><p className="data-label mb-1">Execution model</p><p className="text-base font-semibold text-white">Non-custodial</p></div>
+          </div>
+        </section>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300">
-            Error: {error}
-            <button
-              onClick={fetchListings}
-              className="ml-4 text-sm underline hover:text-red-900 dark:hover:text-red-100"
-            >
-              Retry
+        <section id="marketplace" className="scroll-mt-28">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+            <div>
+              <p className="eyebrow mb-2">The marketplace</p>
+              <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">Available positions</h2>
+              <p className="mt-2 text-sm" style={{ color: '#89939F' }}>Browse active veMEZO locks listed by their holders.</p>
+            </div>
+            <button onClick={fetchListings} className="btn-secondary self-start sm:self-auto" disabled={loading}>
+              {loading ? 'Refreshing…' : '↻ Refresh listings'}
             </button>
           </div>
-        )}
 
-        {loading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="card animate-pulse">
-                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-4"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-              </div>
-            ))}
-          </div>
-        ) : listings.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-gray-500 dark:text-gray-400 text-lg">
-              No active listings found
+          {error && (
+            <div className="mb-6 p-4 rounded-xl border text-sm" style={{ background: 'rgba(169,68,56,.12)', borderColor: 'rgba(196,90,76,.3)', color: '#e5b7b0' }}>
+              <span className="font-semibold">Unable to load listings.</span> {error}
+              <button onClick={fetchListings} className="ml-3 underline underline-offset-4">Try again</button>
             </div>
-            <p className="mt-2 text-gray-400 dark:text-gray-500">
-              Listings will appear here when users list their veMEZO locks for sale.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-4 flex justify-between items-center">
-              <p className="text-gray-600 dark:text-gray-400">
-                Found {listings.length} active listing{listings.length !== 1 ? 's' : ''}
-              </p>
-              <button
-                onClick={fetchListings}
-                className="btn-secondary text-sm"
-                disabled={loading}
-              >
-                Refresh
-              </button>
-            </div>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {listings.map((listing) => (
-                <ListingCard key={listing.tokenId.toString()} listing={listing} />
+          )}
+
+          {loading ? (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="card animate-pulse">
+                  <div className="h-3 rounded w-1/3 mb-6" style={{ background: '#343c46' }} />
+                  <div className="h-8 rounded w-2/3 mb-5" style={{ background: '#343c46' }} />
+                  <div className="h-24 rounded mb-4" style={{ background: '#292f37' }} />
+                  <div className="h-8 rounded" style={{ background: '#343c46' }} />
+                </div>
               ))}
             </div>
-          </>
-        )}
+          ) : listings.length === 0 ? (
+            <div className="rounded-2xl p-10 sm:p-14 text-center" style={{ background: 'rgba(28,32,38,.72)', border: '1px dashed rgba(137,147,159,.3)' }}>
+              <div className="w-14 h-14 rounded-2xl mx-auto mb-5 flex items-center justify-center text-2xl" style={{ background: 'rgba(169,68,56,.16)', color: '#d58d83' }}>⌁</div>
+              <p className="text-xl font-semibold text-white">No active positions yet</p>
+              <p className="mt-2 max-w-md mx-auto text-sm leading-6" style={{ color: '#89939F' }}>When holders list eligible veMEZO locks, they will appear here with live asking prices and lock details.</p>
+              <a href="/sell" className="btn-primary mt-6">Be the first to list</a>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-4 text-xs" style={{ color: '#89939F' }}>
+                <span>{listings.length} active position{listings.length !== 1 ? 's' : ''} found</span>
+                <span className="font-mono">Latest scan · block {lastScannedBlock.toString()}</span>
+              </div>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {listings.map(listing => <ListingCard key={listing.tokenId.toString()} listing={listing} />)}
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="mt-12 grid gap-4 md:grid-cols-3">
+          <div className="surface-panel p-5"><p className="eyebrow mb-2">01 / Retain custody</p><h3 className="font-semibold text-white mb-2">Your NFT stays yours</h3><p className="text-sm leading-6" style={{ color: '#89939F' }}>The seller keeps the veMEZO position until a buyer completes the on-chain purchase.</p></div>
+          <div className="surface-panel p-5"><p className="eyebrow mb-2">02 / Clear execution</p><h3 className="font-semibold text-white mb-2">Dutch or fixed pricing</h3><p className="text-sm leading-6" style={{ color: '#89939F' }}>Listings expose their start price, end price and live asking price before you commit.</p></div>
+          <div className="surface-panel p-5"><p className="eyebrow mb-2">03 / Verifiable</p><h3 className="font-semibold text-white mb-2">On-chain settlement</h3><p className="text-sm leading-6" style={{ color: '#89939F' }}>Transactions execute through the LockMarket contract and can be checked on Mezo Explorer.</p></div>
+        </section>
       </main>
     </div>
   )
