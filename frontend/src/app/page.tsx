@@ -5,7 +5,7 @@ import { createPublicClient, http, parseAbiItem, Abi, Log, Chain } from 'viem'
 import { MEZO_TESTNET_ID, MEZO_TESTNET_RPC, MEZO_TESTNET_NAME, MEZO_TESTNET_EXPLORER } from '@/lib/wagmi'
 import { Nav } from '@/components/Nav'
 import { ListingCard } from '@/components/ListingCard'
-import { DEPLOY_BLOCK, LOCKMARKET_ABI, getAddresses } from '@/lib/contracts'
+import { DEPLOY_BLOCK, LOCKMARKET_ABI, veMEZO_ABI, getAddresses } from '@/lib/contracts'
 import { getErrorMessage, formatAddress } from '@/lib/utils'
 
 const RPC_URL = MEZO_TESTNET_RPC
@@ -155,18 +155,37 @@ export default function BrowsePage() {
         currentBlock
       ) as SoldLog[]
 
-      // Create sets of cancelled and sold tokenIds
-      const cancelledTokenIds = new Set(cancelledLogs.map(log => log.args.tokenId))
-      const soldTokenIds = new Set(soldLogs.map(log => log.args.tokenId))
-
-      // Get unique tokenIds from Listed events (latest event per tokenId wins)
+      // Keep the latest lifecycle event for each token. A cancellation or sale
+      // only invalidates a listing if it happened AFTER that listing; older
+      // terminal events must not hide a subsequently relisted NFT.
       const tokenIdMap = new Map<bigint, ListedLog>()
       for (const log of allLogs) {
         const tokenId = log.args.tokenId
-        // Keep the latest listing event (by block number)
         const existing = tokenIdMap.get(tokenId)
-        if (!existing || log.blockNumber! > existing.blockNumber!) {
+        if (
+          !existing ||
+          (log.blockNumber ?? 0n) > (existing.blockNumber ?? 0n) ||
+          ((log.blockNumber ?? 0n) === (existing.blockNumber ?? 0n) &&
+            (log.logIndex ?? 0) > (existing.logIndex ?? 0))
+        ) {
           tokenIdMap.set(tokenId, log)
+        }
+      }
+
+      const terminalEvents = new Map<bigint, { blockNumber: bigint; logIndex: number }>()
+      for (const log of [...cancelledLogs, ...soldLogs]) {
+        const tokenId = log.args.tokenId
+        const position = {
+          blockNumber: log.blockNumber ?? 0n,
+          logIndex: log.logIndex ?? 0,
+        }
+        const previous = terminalEvents.get(tokenId)
+        if (
+          !previous ||
+          position.blockNumber > previous.blockNumber ||
+          (position.blockNumber === previous.blockNumber && position.logIndex > previous.logIndex)
+        ) {
+          terminalEvents.set(tokenId, position)
         }
       }
 
@@ -174,9 +193,18 @@ export default function BrowsePage() {
       const listingDetails: ListingWithDetails[] = []
 
       for (const [tokenId, log] of tokenIdMap) {
-        // Skip if cancelled or sold
-        if (cancelledTokenIds.has(tokenId) || soldTokenIds.has(tokenId)) {
-          continue
+        // Ignore a token only when its most recent cancel/sale happened
+        // after the latest Listed event.
+        const terminalEvent = terminalEvents.get(tokenId)
+        if (terminalEvent) {
+          const listingBlock = log.blockNumber ?? 0n
+          if (
+            terminalEvent.blockNumber > listingBlock ||
+            (terminalEvent.blockNumber === listingBlock &&
+              terminalEvent.logIndex > (log.logIndex ?? 0))
+          ) {
+            continue
+          }
         }
 
         try {
@@ -197,18 +225,40 @@ export default function BrowsePage() {
           const currentTime = BigInt(Math.floor(Date.now() / 1000))
           if (currentTime > endTime) continue
 
-          // Get lock details (inspect)
-          const lockData = await publicClient.readContract({
-            address: lockMarketAddress,
-            abi: LOCKMARKET_ABI,
-            functionName: 'inspect',
-            args: [tokenId],
-          }) as [bigint, bigint, boolean, bigint, boolean, number, string, bigint, boolean]
+          // The listing getter is the source of truth for listing status.
+          // Do not discard a valid Listed event solely because the optional
+          // inspect() helper reports listingActive=false or is unavailable.
+          let amount = 0n
+          let end = 0n
+          let isPermanent = false
+          let currentPrice = startPrice
 
-          const [amount, end, isPermanent, , , , , currentPrice, listingActive] = lockData
+          try {
+            const lockData = await publicClient.readContract({
+              address: lockMarketAddress,
+              abi: LOCKMARKET_ABI,
+              functionName: 'inspect',
+              args: [tokenId],
+            }) as [bigint, bigint, boolean, bigint, boolean, number, string, bigint, boolean]
 
-          // Skip if not actively listed
-          if (!listingActive) continue
+            amount = lockData[0]
+            end = lockData[1]
+            isPermanent = lockData[2]
+            currentPrice = lockData[7]
+          } catch (inspectError) {
+            // Fallback to the veMEZO NFT's canonical lock getter.
+            const veMezoAddress = addresses.veMEZO as `0x${string}`
+            const lock = await publicClient.readContract({
+              address: veMezoAddress,
+              abi: veMEZO_ABI,
+              functionName: 'locked',
+              args: [tokenId],
+            }) as [bigint, bigint, boolean]
+            amount = BigInt(lock[0])
+            end = lock[1]
+            isPermanent = lock[2]
+            console.warn(`inspect() failed for tokenId ${tokenId}; used veMEZO.locked():`, inspectError)
+          }
 
           listingDetails.push({
             tokenId,
