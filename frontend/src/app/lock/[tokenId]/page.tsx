@@ -382,8 +382,8 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
                   <label className="text-sm text-gray-500 dark:text-gray-400">Price Progress</label>
                   <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-1">
                     <div
-                      className="h-full transition-all duration-300" style={{ background: "#A94438" }}
-                      style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                      className="h-full transition-all duration-300"
+                      style={{ background: "#A94438", width: `${Math.min(100, Math.max(0, progress))}%` }}
                     />
                   </div>
                   <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
