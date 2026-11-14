@@ -80,7 +80,7 @@ export default function SellPage() {
           const tokenId = await publicClient.readContract({
             address: veMEZOAddress,
             abi: veMEZO_ABI,
-            functionName: 'tokenOfOwnerByIndex',
+            functionName: 'ownerToNFTokenIdList',
             args: [address, i],
           }) as bigint
 
