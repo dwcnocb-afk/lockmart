@@ -132,7 +132,7 @@ export const veMEZO_ABI = [
       { internalType: "address", name: "owner", type: "address" },
       { internalType: "uint256", name: "index", type: "uint256" },
     ],
-    name: "tokenOfOwnerByIndex",
+    name: "ownerToNFTokenIdList",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
