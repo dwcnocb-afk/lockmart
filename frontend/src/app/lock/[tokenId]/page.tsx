@@ -38,7 +38,7 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
 
   const { address, chainId } = useAccount()
   const publicClient = usePublicClient()
-  const { writeContract, data: hash, isPending: isWriting } = useWriteContract()
+  const { writeContractAsync, data: hash, isPending: isWriting } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
 
   const [lockData, setLockData] = useState<LockDetailData | null>(null)
@@ -115,7 +115,15 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
   }, [fetchData])
 
   const handleBuy = async () => {
-    if (!address || !listingData || !lockData) return
+    if (!address || !publicClient || !listingData || !lockData) {
+      setTxError('Connect your wallet and wait for the lock details to load.')
+      return
+    }
+
+    if (!isMezoTestnet) {
+      setTxError('Switch your wallet to Mezo Testnet before buying.')
+      return
+    }
 
     setBuyLoading(true)
     setTxError(null)
@@ -130,13 +138,24 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
         currentTime
       )
 
-      // Set slippage defaults: 5% for maxPrice, 0 for minAmount/minEnd
-      const maxPrice = currentPrice + (currentPrice * 5n / 100n) // 5% slippage
-      const minAmount = 0n
-      const minEnd = 0n
+      if (
+        !lockData.listingActive ||
+        listingData.cancelled ||
+        listingData.sold ||
+        currentTime > listingData.endTime ||
+        currentPrice <= 0n
+      ) {
+        throw new Error('This listing is no longer available. Refresh the page and try another listing.')
+      }
 
-      // First approve MUSD if needed
-      const allowance = await publicClient?.readContract({
+      // Allow a 5% price movement while the wallet confirmation is pending.
+      const maxPrice = currentPrice + (currentPrice * 5n / 100n)
+      // Protect the buyer against the seller reducing the lock before purchase.
+      const minAmount = lockData.amount
+      const minEnd = lockData.isPermanent ? 0n : lockData.end
+
+      // Read the current allowance before asking the buyer to approve MUSD.
+      let allowance = await publicClient.readContract({
         address: musdAddress,
         abi: MUSD_ABI,
         functionName: 'allowance',
@@ -144,25 +163,52 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
       }) as bigint
 
       if (allowance < maxPrice) {
-        // Approve maxPrice amount
-        await writeContract({
+        // Submit approval and WAIT until it is mined before attempting buy().
+        const approvalHash = await writeContractAsync({
           address: musdAddress,
           abi: MUSD_ABI,
           functionName: 'approve',
           args: [lockMarketAddress, maxPrice],
         })
 
-        // Wait for approval to confirm
-        // The useWaitForTransactionReceipt will handle this
+        const approvalReceipt = await publicClient.waitForTransactionReceipt({
+          hash: approvalHash,
+        })
+
+        if (approvalReceipt.status !== 'success') {
+          throw new Error('MUSD approval transaction failed. The purchase was not submitted.')
+        }
+
+        // Confirm the allowance actually changed on-chain; wallet submission alone is not enough.
+        allowance = await publicClient.readContract({
+          address: musdAddress,
+          abi: MUSD_ABI,
+          functionName: 'allowance',
+          args: [address, lockMarketAddress],
+        }) as bigint
+
+        if (allowance < maxPrice) {
+          throw new Error('MUSD approval is confirmed, but the marketplace allowance is still insufficient. Refresh and try again.')
+        }
       }
 
-      // Then buy
-      await writeContract({
+      // Submit the purchase only after the required allowance is confirmed.
+      const buyHash = await writeContractAsync({
         address: lockMarketAddress,
         abi: LOCKMARKET_ABI,
         functionName: 'buy',
         args: [tokenIdBigInt, maxPrice, minAmount, minEnd],
       })
+
+      const buyReceipt = await publicClient.waitForTransactionReceipt({
+        hash: buyHash,
+      })
+
+      if (buyReceipt.status !== 'success') {
+        throw new Error('The purchase transaction failed. Check the transaction on the Mezo explorer.')
+      }
+
+      await fetchData()
     } catch (err) {
       setTxError(getErrorMessage(err))
     } finally {
