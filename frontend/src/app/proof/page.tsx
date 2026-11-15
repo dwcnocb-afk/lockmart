@@ -99,37 +99,6 @@ export default function ProofPage() {
           )}
         </div>
 
-        {/* Instructions */}
-        <div className="mt-8 card">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Adding Demo Transactions</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Edit the <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">DEMO_TRANSACTIONS</code> array in <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">src/app/proof/page.tsx</code> to add your own transaction hashes.
-          </p>
-          <pre className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto text-sm">
-{`const DEMO_TRANSACTIONS = [
-  {
-    hash: '0x...',
-    description: 'Buy lock #123',
-    type: 'buy',
-  },
-  {
-    hash: '0x...',
-    description: 'List lock #456',
-    type: 'list',
-  },
-  // ...
-]`}
-          </pre>
-          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <h3 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Transaction Types</h3>
-            <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
-              <li><strong>deployment</strong> - Contract deployments</li>
-              <li><strong>buy</strong> - Buy transactions</li>
-              <li><strong>list</strong> - List transactions</li>
-              <li><strong>cancel</strong> - Cancel transactions</li>
-            </ul>
-          </div>
-        </div>
       </main>
     </div>
   )
