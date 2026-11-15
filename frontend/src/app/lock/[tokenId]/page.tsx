@@ -125,7 +125,7 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
   }, [fetchData])
 
   const handleBuy = async () => {
-    if (!address || !listingData || !lockData) return
+    if (!address || !listingData || !lockData || !publicClient) return
 
     setBuyLoading(true)
     setTxError(null)
@@ -140,13 +140,28 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
         currentTime
       )
 
-      // Set slippage defaults: 5% for maxPrice, 0 for minAmount/minEnd
-      const maxPrice = currentPrice + (currentPrice * 5n / 100n) // 5% slippage
+      // 5% slippage on maxPrice, no minimums on amount/end
+      const maxPrice = currentPrice + (currentPrice * 5n) / 100n
       const minAmount = 0n
       const minEnd = 0n
 
-      // First approve MUSD if needed, and WAIT for it to confirm before buying
-      const allowance = (await publicClient?.readContract({
+      // 1. Preflight: does the buyer have enough MUSD?
+      const balance = (await publicClient.readContract({
+        address: musdAddress,
+        abi: MUSD_ABI,
+        functionName: 'balanceOf',
+        args: [address],
+      })) as bigint
+
+      if (balance < currentPrice) {
+        setTxError(
+          `Not enough MUSD. This lock costs ${formatPrice(currentPrice)} MUSD and your wallet has ${formatPrice(balance)} MUSD.`
+        )
+        return
+      }
+
+      // 2. Approve MUSD if needed, and wait for it to be mined
+      const allowance = (await publicClient.readContract({
         address: musdAddress,
         abi: MUSD_ABI,
         functionName: 'allowance',
@@ -160,17 +175,26 @@ export default function LockDetailPage({ params }: { params: { tokenId: string }
           functionName: 'approve',
           args: [lockMarketAddress, maxPrice],
         })
-        await publicClient?.waitForTransactionReceipt({ hash: approveHash })
+        const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash })
+        if (approveReceipt.status !== 'success') {
+          setTxError('The MUSD approval failed. Please try again.')
+          return
+        }
       }
 
-      // Then buy
+      // 3. Buy
       const buyHash = await writeContractAsync({
         address: lockMarketAddress,
         abi: LOCKMARKET_ABI,
         functionName: 'buy',
         args: [tokenIdBigInt, maxPrice, minAmount, minEnd],
       })
-      await publicClient?.waitForTransactionReceipt({ hash: buyHash })
+      const buyReceipt = await publicClient.waitForTransactionReceipt({ hash: buyHash })
+      if (buyReceipt.status !== 'success') {
+        setTxError('The purchase transaction reverted. The listing may have changed, so refresh and try again.')
+        return
+      }
+
       fetchData()
     } catch (err) {
       setTxError(getErrorMessage(err))
