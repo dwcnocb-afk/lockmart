@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
 import { Nav } from '@/components/Nav'
+import { useChainContext } from '@/app/chain-provider'
 import { LOCKMARKET_ABI, veMEZO_ABI, MUSD_ABI, getAddresses } from '@/lib/contracts'
 import { formatAddress, formatAmount, formatPrice, getErrorMessage, formatTime } from '@/lib/utils'
 import { MEZO_TESTNET_ID } from '@/lib/wagmi'
@@ -36,6 +37,7 @@ interface UserListing {
 export default function SellPage() {
   const { address, chainId } = useAccount()
   const publicClient = usePublicClient()
+  const { connectWallet, switchNetwork } = useChainContext()
   const { writeContract, writeContractAsync, data: hash, isPending: isWriting } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
 
@@ -61,7 +63,10 @@ export default function SellPage() {
   const veMEZOAddress = addresses.veMEZO as `0x${string}`
 
   const fetchUserLocks = useCallback(async () => {
-    if (!address || !publicClient) return
+    if (!address || !publicClient) {
+      setLoading(false)
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -262,7 +267,7 @@ export default function SellPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <section className="mb-8 rounded-2xl p-6 sm:p-8" style={{ background: 'linear-gradient(110deg,rgba(55,35,35,.8),rgba(29,33,39,.96))', border: '1px solid rgba(214,168,79,.18)' }}>
           <p className="eyebrow mb-3">Seller workspace / Mezo Testnet</p>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">Manage your positions</h1>
+          <h1 className="font-display text-4xl sm:text-5xl font-medium tracking-tight text-white">Manage your positions</h1>
           <p className="mt-3 max-w-2xl text-sm sm:text-base leading-6" style={{ color: '#aeb6c0' }}>
             Review your veMEZO locks, check listing eligibility and create a transparent sale listing. Your NFT remains in your wallet until a buyer completes the purchase.
           </p>
@@ -273,18 +278,21 @@ export default function SellPage() {
         </section>
 
         {!isMezoTestnet && (
-          <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <p className="text-yellow-800 dark:text-yellow-200">
-              Please switch to Mezo Testnet to list your locks.
+          <div role="status" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl p-4" style={{ background: 'rgba(214,168,79,.08)', border: '1px solid rgba(214,168,79,.28)' }}>
+            <p className="text-sm" style={{ color: '#e0bd77' }}>
+              Your wallet is on a different network. Switch to Mezo Testnet to list your locks.
             </p>
+            {address && <button onClick={switchNetwork} className="btn-secondary !py-1.5 !text-xs">Switch network</button>}
           </div>
         )}
 
         {!address && (
-          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-blue-800 dark:text-blue-200">
-              Connect your wallet to see your veMEZO locks.
+          <div className="rounded-2xl p-10 text-center sm:p-14" style={{ background: 'rgba(27,31,37,.55)', border: '1px dashed rgba(137,147,159,.3)' }}>
+            <p className="font-display text-2xl font-medium text-white">Connect a wallet to see your locks</p>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6" style={{ color: '#89939F' }}>
+              Lockmart reads the veMEZO locks held by your address. Nothing is moved until you create a listing and approve it.
             </p>
+            <button onClick={connectWallet} className="btn-primary mt-6">Connect wallet</button>
           </div>
         )}
 
@@ -297,10 +305,10 @@ export default function SellPage() {
         )}
 
         {userLocks.length === 0 && unreadableIds.length === 0 && address && (
-          <div className="text-center py-12">
-            <div className="text-gray-500 dark:text-gray-400 text-lg">No veMEZO locks found</div>
-            <p className="mt-2 text-gray-400 dark:text-gray-500">
-              You don't own any veMEZO NFTs on this network.
+          <div className="rounded-2xl p-10 text-center sm:p-14" style={{ background: 'rgba(27,31,37,.55)', border: '1px dashed rgba(137,147,159,.3)' }}>
+            <p className="font-display text-2xl font-medium text-white">No veMEZO locks in this wallet</p>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6" style={{ color: '#89939F' }}>
+              This address doesn&apos;t hold a veMEZO lock on Mezo Testnet, so there is nothing to list yet. If you expected one, check that you are connected with the wallet that created it.
             </p>
           </div>
         )}

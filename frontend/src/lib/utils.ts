@@ -8,8 +8,8 @@ export function formatBigInt(value: bigint, decimals = 18, fixed = 4): string {
   const whole = value / divisor
   const fraction = value % divisor
   if (fraction === 0n) return whole.toString()
-  const fractionStr = fraction.toString().padStart(decimals, '0').slice(0, fixed)
-  return `${whole}.${fractionStr}`
+  const fractionStr = fraction.toString().padStart(decimals, '0').slice(0, fixed).replace(/0+$/, '')
+  return fractionStr ? `${whole}.${fractionStr}` : whole.toString()
 }
 
 export function formatPrice(value: bigint): string {
